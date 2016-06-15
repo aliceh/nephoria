@@ -104,7 +104,7 @@ class CWops(BotoBaseOps):
         '''
         cw_region = RegionInfo()
         if region:
-            self.debug('Check region: ' + str(region))
+            self.log.debug('Check region: ' + str(region))
             try:
                 if not endpoint:
                     cw_region.endpoint = CWRegionData[region]
@@ -158,7 +158,7 @@ class CWops(BotoBaseOps):
         return namespaces
 
     def list_metrics(self, next_token=None, dimensions=None, metric_name=None, namespace=None):
-        self.connection.debug(
+        self.log.debug(
             'Calling list_metrics( {p1}, {p2}, {p3}, {p4} )'.format(p1=next_token, p2=dimensions, p3=metric_name,
                                                                     p4=namespace))
         return self.connection.list_metrics(next_token, dimensions, metric_name, namespace)
