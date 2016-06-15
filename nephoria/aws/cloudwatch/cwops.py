@@ -165,7 +165,7 @@ class CWops(BotoBaseOps):
 
     def get_metric_statistics(self, period, start_time, end_time, metric_name, namespace, statistics, dimensions=None,
                               unit=None):
-        self.debug(
+        self.log.debug(
             'Calling get_metric_statistics( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7}, {p8} )'.format(
                 p1=period, p2=start_time, p3=end_time, p4=metric_name, p5=namespace, p6=statistics, p7=dimensions,
                 p8=unit))
@@ -173,7 +173,7 @@ class CWops(BotoBaseOps):
                                                      dimensions, unit)
 
     def put_metric_data(self, namespace, name, value=None, timestamp=None, unit=None, dimensions=None, statistics=None):
-        self.debug('Calling put_metric_data( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7} )'.format(
+        self.log.debug('Calling put_metric_data( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7} )'.format(
             p1=namespace, p2=name, p3=value, p4=timestamp, p5=unit, p6=dimensions, p7=dimensions))
         return self.connection.put_metric_data(namespace, name, value, timestamp, unit, dimensions, statistics)
 
@@ -181,7 +181,7 @@ class CWops(BotoBaseOps):
                      description=None, dimensions=None, alarm_actions=None,
                      ok_actions=None, insufficient_data_actions=None, unit=None, namespace=None):
 
-        self.debug(
+        self.log.debug(
             'Calling create_metric_alarm ( {p1}, {p2}, {p3}, {p4}, {p5}, {p6}, {p7}, {p8}, {p9}, {p10}, {p11}, {p12}, {p13}, {p14} )'.format(
                 p1=name, p2=metric, p3=comparison, p4=threshold, p5=period, p6=evaluation_periods, p7=statistic,
                 p8=description, p9=dimensions, p10=alarm_actions, p11=ok_actions, p12=insufficient_data_actions,
@@ -198,17 +198,17 @@ class CWops(BotoBaseOps):
         return alarm
 
     def put_metric_alarm(self, alarm):
-        self.debug('Calling put_metric_alarm (' + str(alarm) + ')')
+        self.log.debug('Calling put_metric_alarm (' + str(alarm) + ')')
         self.connection.put_metric_alarm(alarm)
 
     def set_alarm_state(self, alarm_name, state_reason='testing', state_value='ALARM', state_reason_data=None):
-        self.debug(
+        self.log.debug(
             'Calling set_alarm_state( {p1}, {p2}, {p3}, {p4})'.format(p1=alarm_name, p2=state_reason, p3=state_value,
                                                                       p4=state_reason_data))
         self.connection.set_alarm_state(alarm_name, state_reason, state_value)
 
     def delete_all_alarms(self):
-        self.debug('Calling delete_all_alarms(' + str(self.connection.describe_alarms()) + ')')
+        self.log.debug('Calling delete_all_alarms(' + str(self.connection.describe_alarms()) + ')')
         alarms = self.connection.describe_alarms()
         if alarms:
             alarm_names = [alarm.name for alarm in alarms]
@@ -216,7 +216,7 @@ class CWops(BotoBaseOps):
 
     def describe_alarms(self, action_prefix=None, alarm_name_prefix=None, alarm_names=None, max_records=None,
                         state_value=None, next_token=None):
-        self.debug(
+        self.log.debug(
             'Calling describe_alarms( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=action_prefix,
                                                                                    p2=alarm_name_prefix, p3=alarm_names,
                                                                                    p4=max_records, p5=state_value,
@@ -226,7 +226,7 @@ class CWops(BotoBaseOps):
 
     def describe_alarms_for_metric(self, metric_name, namespace, period=None, statistic=None, dimensions=None,
                                    unit=None):
-        self.debug(
+        self.log.debug(
             'Calling describe_alarms_for_metric( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=metric_name,
                                                                                               p2=namespace, p3=period,
                                                                                               p4=statistic,
@@ -235,7 +235,7 @@ class CWops(BotoBaseOps):
 
     def describe_alarm_history(self, alarm_name=None, start_date=None, end_date=None, max_records=None,
                                history_item_type=None, next_token=None):
-        self.debug(
+        self.log.debug(
             'Calling describe_alarm_history( {p1}, {p2}, {p3}, {p4}, {p5}, {p6} )'.format(p1=alarm_name, p2=start_date,
                                                                                           p3=end_date, p4=max_records,
                                                                                           p5=history_item_type,
@@ -259,11 +259,11 @@ class CWops(BotoBaseOps):
         return EbsMetricsArray
 
     def enable_alarm_actions(self, alarm_names):
-        self.debug('Calling enable_alarm_actions( ' + str(alarm_names) + ' )')
+        self.log.debug('Calling enable_alarm_actions( ' + str(alarm_names) + ' )')
         self.connection.enable_alarm_actions(alarm_names)
 
     def disable_alarm_actions(self, alarm_names):
-        self.debug('Calling disable_alarm_actions( ' + str(alarm_names) + ' )')
+        self.log.debug('Calling disable_alarm_actions( ' + str(alarm_names) + ' )')
         self.connection.disable_alarm_actions(alarm_names)
 
     def validateStats(self, values):
