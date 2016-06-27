@@ -223,6 +223,7 @@ disable_root: false"""
         if key_name is None:
             key_name = "keypair-" + str(int(time.time())) 
         self.log.debug("Looking up keypair " + key_name)
+        key = None
         try:
             key = self.connection.get_key_pair(key_name)
         except EC2ResponseError:
@@ -404,10 +405,11 @@ disable_root: false"""
     def add_group(self, group_name=None, description=None, vpc_id=None, fail_if_exists=False ):
         """
         Add a security group to the system with name group_name, if it exists dont create it
-
-        :param group_name: Name of the security group to create
-        :param fail_if_exists: IF set, will fail if group already exists, otherwise will return the existing group
-        :return: boto group object upon success or None for failure
+        Args:
+            group_name:  name of security group
+            description:  description of group
+            vpc_id: VPC id to use for sec
+            fail_if_exists: 
         """
         filters = {}
         if vpc_id:
@@ -1023,7 +1025,7 @@ disable_root: false"""
                 vol = self.connection.create_volume(size, zone, snapshot)
                 cmdtime = time.time() - cmdstart
                 if vol:
-                    vol = EuVolume.make_euvol_from_vol(vol, tester=self, cmdstart=cmdstart)
+                    vol = EuVolume.make_euvol_from_vol(volume=vol, ec2ops=self, cmdstart=cmdstart)
                     vol.eutest_cmdstart = cmdstart
                     vol.eutest_createorder = x
                     vol.eutest_cmdtime = "{0:.2f}".format(cmdtime)
@@ -1239,7 +1241,7 @@ disable_root: false"""
             try:
                 vol = self.get_volume(vol.id)
                 if not isinstance(vol, EuVolume):
-                    vol = EuVolume.make_euvol_from_vol(vol,self)
+                    vol = EuVolume.make_euvol_from_vol(vol, self)
                 monitor.append(vol)
             except:
                 self.log.debug(get_traceback())
@@ -1315,7 +1317,7 @@ disable_root: false"""
             return
         for volume in euvolumelist:
             if not isinstance(volume, EuVolume):
-                volume = EuVolume.make_euvol_from_vol(volume=volume, tester=self)
+                volume = EuVolume.make_euvol_from_vol(volume=volume, ec2ops=self)
             else:
                 try:
                     volume.update()
@@ -1774,7 +1776,7 @@ disable_root: false"""
         """
         if isinstance(volume_id, Volume):
             raise Exception('Expected volume.id got Volume, try create_snapshots or create_snapshot_from_volume methods instead')
-        volume = EuVolume.make_euvol_from_vol(self.get_volume(volume_id), tester=self)
+        volume = EuVolume.make_euvol_from_vol(volume=self.get_volume(volume_id), ec2ops=self)
         return self.create_snapshots(volume,
                                      count=count, mincount=mincount, eof=eof, delay=delay,
                                      wait_on_progress=wait_on_progress, poll_interval=poll_interval,
@@ -1819,7 +1821,7 @@ disable_root: false"""
         """
         #Fix EuSnapshot for isinstance() use later...
         if not hasattr(volume, 'md5'):
-            volume = EuVolume.make_euvol_from_vol(volume,tester= self)
+            volume = EuVolume.make_euvol_from_vol(volume=volume, ec2ops=self)
         volume_id = volume.id
         snapshots = []
         retlist = []
@@ -2479,12 +2481,10 @@ disable_root: false"""
                 filters['tag-value'] = tagvalue
 
         # if emi is None and not platform:
-        if basic_image is None and not _args_dict:
+        if basic_image is None and _args_dict and not _args_dict.get('kwargs', None):
             # If a specific EMI was not provided, set some sane defaults for
             # fetching a test image to work with...
             basic_image = True
-        if name is None:
-             emi = ""
         if filters:
             self.log.debug('Using following filters for image request:"{0}"'.format(filters))
             images = self.connection.get_all_images(filters=filters)
@@ -2492,7 +2492,9 @@ disable_root: false"""
             images = self.connection.get_all_images()
         self.log.debug("Got " + str(len(images)) + " total images " + str(emi) + ", now filtering..." )
         for image in images:
-            if (re.search(emi, image.id) is None) and (re.search(emi, image.name) is None):
+            if emi and (re.search(emi, image.id) is None):
+                continue
+            if name is not None and (re.search(emi, image.name) is None):
                 continue
             if (root_device_type is not None) and (image.root_device_type != root_device_type):
                 continue
@@ -2545,7 +2547,7 @@ disable_root: false"""
                    arch=None,
                    owner_id=None,
                    filters=None,
-                   basic_image=True,
+                   basic_image=None,
                    platform=None,
                    not_platform=None,
                    tagkey=None,
@@ -2573,7 +2575,7 @@ disable_root: false"""
         # If no criteria was provided for filter an image, use 'basic_image'
         # flag to provide some sane defaults
         if basic_image is None:
-            if not _args_dict:
+            if _args_dict and not _args_dict.get('kwargs', None):
                 basic_image = True
             else:
                 basic_image = False
@@ -2898,7 +2900,7 @@ disable_root: false"""
         volumes = self.connection.get_all_volumes(filters=filters)
         for volume in volumes:
             if not hasattr(volume,'md5'):
-                volume = EuVolume.make_euvol_from_vol(volume, tester=self)
+                volume = EuVolume.make_euvol_from_vol(volume=volume, ec2ops=self)
             if not re.match(volume_id, volume.id):
                 continue
             if (snapid is not None) and (volume.snapshot_id != snapid):
@@ -2918,8 +2920,6 @@ disable_root: false"""
                 continue
             if maxsize is not None and volume.size > maxsize:
                 continue
-            if not hasattr(volume,'md5'):
-                volume = EuVolume.make_euvol_from_vol(volume)
             retlist.append(volume)
         if eof and retlist == []:
             raise EC2ResourceNotFoundException("Unable to find matching volume")
@@ -3111,6 +3111,7 @@ disable_root: false"""
                   auto_create_eni=True,
                   network_interfaces=None,
                   timeout=480,
+                  systemconnection=None,
                   boto_debug_level=2,
                   **boto_run_args):
         """
@@ -3323,10 +3324,11 @@ disable_root: false"""
                             keypair=keypair,
                             password=password,
                             username=username,
-                            do_ssh_connect=False,
+                            auto_connect=False,
                             timeout=timeout,
                             private_addressing=private_addressing,
                             reservation=reservation,
+                            systemconnection=systemconnection,
                             cmdstart=cmdstart)
                     #set the connect flag in the euinstance object for future use
                     eu_instance.auto_connect = auto_connect
@@ -3978,6 +3980,14 @@ disable_root: false"""
                                 raise Exception('FAILED STATE:'+ dbgmsg )
 
                     self.log.debug("WAITING for "+dbgmsg)
+
+                except EC2ResponseError, e:
+                    if e.status == 400 and state == 'terminated':
+                        self.log.debug('Instance {0} no longer found on system, assuming '
+                                       'terminated. Elapsed:{1}/{2}'.format(instance.id,
+                                                                            elapsed,
+                                                                            timeout))
+                        good.append(instance)
                 except Exception, e:
                     failed.append(instance)
                     tb = get_traceback()
@@ -4160,6 +4170,7 @@ disable_root: false"""
     def convert_instance_to_euinstance(self, instance, keypair=None,
                                        username=None, password=None,
                                        reservation=None, auto_connect=True,
+                                       systemconnection=None,
                                        timeout=120):
         if isinstance(instance, basestring):
             ins = self.get_instances(idstring=instance)
@@ -4185,8 +4196,9 @@ disable_root: false"""
                                                                 keypair=keypair,
                                                                 password=password,
                                                                 username=username,
-                                                                do_ssh_connect=auto_connect,
+                                                                auto_connect=auto_connect,
                                                                 timeout=timeout,
+                                                                systemconnection=systemconnection,
                                                                 reservation=reservation)
         if 'instances' in self.test_resources:
             for x in xrange(0, len(self.test_resources['instances'])):
@@ -5426,6 +5438,10 @@ disable_root: false"""
     def show_images(self, images=None, verbose=False, basic_image=False, printmethod=None):
         printmethod = printmethod or self.log.info
         buf = "\n"
+        if isinstance(images, basestring):
+            images = self.get_images(emi=images, basic_image=basic_image, state=None)
+        if isinstance(images, Image):
+            images = [images]
         if not images:
             try:
                 images = self.get_images(emi='',basic_image=basic_image, state=None) or []

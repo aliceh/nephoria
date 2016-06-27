@@ -49,26 +49,11 @@ class Euca2oolsImageUtils(object):
     gig = 1073741824
     mb = 1048576
     kb = 1024
-    def __init__(self,
-                 access_key=None,
-                 secret_key=None,
-                 account_id=None,
-                 region_domain=None,
-                 s3_url=None,
-                 ec2_url=None,
-                 bootstrap_url=None,
-                 ec2_cert_path=None,
-                 worker_hostname=None,
-                 worker_keypath=None,
-                 worker_username='root',
-                 worker_password=None,
-                 worker_machine=None,
-                 user_context=None,
-                 test_controller=None,
-                 log_level='debug',
-                 destpath=None,
-                 time_per_gig=300,
-                 eof=True):
+    def __init__(self, access_key=None, secret_key=None, account_id=None, region_domain=None,
+                 s3_url=None, ec2_url=None, bootstrap_url=None, ec2_cert_path=None,
+                 worker_hostname=None, worker_keypath=None, worker_username='root',
+                 worker_password=None, worker_machine=None, user_context=None, log_level='debug',
+                 destpath=None, time_per_gig=300, eof=True):
         
         self.access_key = access_key
         self.secret_key = secret_key
@@ -87,8 +72,7 @@ class Euca2oolsImageUtils(object):
         self.worker_username = worker_username
         self.worker_password = worker_password
         self._worker_machine = None
-        self._user_context = None
-        self.user_context = user_context
+        self._user_context = user_context
         if worker_machine:
             self._worker_machine = worker_machine
         
@@ -166,7 +150,7 @@ class Euca2oolsImageUtils(object):
     def user_context(self):
         if not self._user_context:
             try:
-                self.user_context = self.create_user_context(access_key=self.access_key,
+                self._user_context = self.create_user_context(access_key=self.access_key,
                                                              secret_key=self.secret_key,
                                                              region_domain=self.region_domain,
                                                              ec2_url=self.ec2_url,
@@ -394,6 +378,7 @@ class Euca2oolsImageUtils(object):
                      destination='/disk1/storage',
                      arch='x86_64',
                      debug=False,
+                     user_context=None,
                      interbundle_timeout=120,
                      time_per_gig=None):
         '''
@@ -406,6 +391,7 @@ class Euca2oolsImageUtils(object):
         image_size = machine.get_file_size(path)/self.gig or 1
         timeout = time_per_gig * image_size
         cbargs = [timeout, interbundle_timeout, time.time(), 0, True]
+        user_context = user_context or self.user_context
         if destination is None:
             destination = machine.sys('pwd')[0]
         freesize = machine.get_available(str(destination), (self.gig/self.kb))
@@ -413,9 +399,17 @@ class Euca2oolsImageUtils(object):
             raise Exception("Not enough free space at:" + str(destination))
         ec2cert = ec2cert or self.ec2_cert_path
         bootstrap_url = bootstrap_url or self.bootstrap_url
+        if not bootstrap_url and user_context:
+            bootstrap_url = user_context.bootstrap_url
         access_key = access_key or self.access_key
+        if not access_key and user_context:
+            access_key = user_context.access_key
         secret_key = secret_key or self.secret_key
+        if not secret_key and user_context:
+            secret_key = user_context.secret_key
         account_id = account_id or self.account_id
+        if not account_id and user_context:
+            account_id = user_context.account_id
 
         #build our tools bundle-image command...
         cmdargs = ""
@@ -483,9 +477,16 @@ class Euca2oolsImageUtils(object):
         '''
         self.status_log('Starting euca2ools_upload_bundle for manifest:"{0}"'.format(manifest))
         machine = machine or self.worker_machine
-        access_key = access_key or self.access_key
-        secret_key = secret_key or self.secret_key
+        user_context = user_context or self.user_context
         s3_url = s3_url or self.s3_url
+        if not s3_url and user_context:
+            s3_url = user_context.s3_url
+        access_key = access_key or self.access_key
+        if not access_key and user_context:
+            access_key = user_context.access_key
+        secret_key = secret_key or self.secret_key
+        if not secret_key and user_context:
+            secret_key = user_context.secret_key
         if not access_key:
             raise ValueError('Could not determine access key for euca2ools_upload_bundle')
         if not secret_key:
@@ -574,14 +575,21 @@ class Euca2oolsImageUtils(object):
                            virtualization_type=None,
                            platform=None,
                            machine=None,
-                           machine_credpath=None):
+                           machine_credpath=None,
+                           user_context=None):
         self.status_log('Starting euca2ools_register for manifest:"{0}", kernel:"{1}", ramdisk:"{2}"'
                     .format(manifest, kernel,ramdisk))
-
+        user_context = user_context or self.user_context
         machine = machine or self.worker_machine
         access_key = access_key or self.access_key
+        if not access_key and user_context:
+            access_key = user_context.access_key
         secret_key = secret_key or self.secret_key
+        if not secret_key and user_context:
+            secret_key = user_context.secret_key
         ec2_url = ec2_url or self.ec2_url
+        if not ec2_url and user_context:
+            ec2_url = user_context.ec2_url
         if not access_key:
             self.log.warning('Could not determine access key for euca2ools_register')
         if not secret_key:
@@ -861,15 +869,15 @@ class Euca2oolsImageUtils(object):
             cmdargs += " --instance-initiated-shutdown-behavior " + \
                         str(shutdown_behavior)
         if access_key:
-            cmdargs += " -w " + str(access_key)
+            cmdargs += " -I " + str(access_key)
         if secret_key:
-            cmdargs += " -o " + str(secret_key)
+            cmdargs += " -S " + str(secret_key)
         if security_token:
             cmdargs += " --security-token " + str(security_token)
         if misc:
             cmdargs += misc
 
-        cmd = 'euca-upload-import-volume ' + str(cmdargs)
+        cmd = 'euca-import-instance ' + str(cmdargs)
 
         out = machine.sys(cmd=cmd, timeout=timeout, code=0)
         taskid = None
